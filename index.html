@@ -43,7 +43,7 @@
    CONFIGURAÇÃO — edite aqui
    ============================================================ */
 const CONFIG = {
-  checkout: "#",                       // link do checkout
+  checkout: "https://checkout.cooud.com/01M3FDBRQSBVNKM8KDCAYS74BF", // link do checkout
   preco: "19,90 €",                    // preço exibido
   precoObs: "Paiement unique · Accès à vie",
   medicaNome: "",                      // ex.: "Dre Juliana Martins" (vazio = só "Médecin")
@@ -717,7 +717,18 @@ const PAGES = {
       ["BONUS : 20 shakes et smoothies", true],
       ["BONUS : 40 desserts gourmands et équilibrés", true],
     ];
-    const cta = (txt) => `<a href="${esc(CONFIG.checkout)}" class="btn-quiz-green block w-full text-center">${txt}</a>`;
+    function getCheckoutUrl() {
+      try {
+        const u = new URL(CONFIG.checkout);
+        const cur = new URLSearchParams(window.location.search);
+        cur.delete("page");
+        cur.forEach((v, k) => { if (!u.searchParams.has(k)) u.searchParams.set(k, v); });
+        return u.toString();
+      } catch (e) {
+        return CONFIG.checkout;
+      }
+    }
+    const cta = (txt) => `<a href="${esc(getCheckoutUrl())}" onclick="if(window.ttq) ttq.track('InitiateCheckout');" class="btn-quiz-green block w-full text-center">${txt}</a>`;
     return `
     <div class="flex flex-col">
       <div class="bg-primary text-primary-foreground text-center py-2 text-sm font-bold sticky top-0 z-10">🎁 Votre plan personnalisé est prêt</div>
