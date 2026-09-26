@@ -1,0 +1,797 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Le Secret de l'Insuline</title>
+  <meta name="description" content="Découvrez la routine de 21 jours adaptée à votre corps. Quiz gratuit." />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Le Secret de l'Insuline" />
+  <meta property="og:description" content="Découvrez la routine de 21 jours adaptée à votre corps. Quiz gratuit." />
+  <link rel="icon" href="favicon.ico" />
+  <link rel="stylesheet" href="estilo.css" />
+  <style>
+    /* Complementos do CSS original */
+    .faq-item { border-bottom: 1px solid hsl(var(--border)); }
+    .faq-item summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: 1rem 0; font-size: .875rem; font-weight: 700; }
+    .faq-item summary::-webkit-details-marker { display: none; }
+    .faq-item summary svg { flex-shrink: 0; transition: transform .2s; }
+    .faq-item[open] summary svg { transform: rotate(180deg); }
+    .faq-item p { padding-bottom: 1rem; font-size: .875rem; color: hsl(var(--muted-foreground)); }
+    .aviso { font-size: 10px; line-height: 1.4; color: hsl(var(--muted-foreground)); text-align: center; }
+    .btn-quiz:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+  </style>
+</head>
+<body>
+  <div id="app" class="h-[100dvh] flex flex-col max-w-lg mx-auto overflow-hidden bg-background"></div>
+
+<script>
+/* ============================================================
+   CONFIGURAÇÃO — edite aqui
+   ============================================================ */
+const CONFIG = {
+  checkout: "#",                       // link do checkout
+  preco: "19,90 €",                    // preço exibido
+  precoObs: "Paiement unique · Accès à vie",
+  medicaNome: "",                      // ex.: "Dre Juliana Martins" (vazio = só "Médecin")
+  medicaTitulo: "CRÉATRICE DE LA MÉTHODE",
+  imagemTela6: "imagens/imagemaq.png", // IMAGEMAQUI — imagem da tela 6                   // IMAGEMAQUI — caminho da imagem da tela 6, ex.: "imagens/minha-imagem.jpg"
+};
+
+/* ============================================================
+   ESTADO
+   ============================================================ */
+const TOTAL = 29;
+const state = {
+  age: "", bodyType: "", bodyAreas: [], name: "", weightImpact: "", appearance: "",
+  barriers: [], goals: [], weight: 75, height: 165, desiredWeight: 65, routine: [],
+  sleep: "", commitment: "", bloating: "", firstResult: "",
+};
+let page = (() => {
+  const p = parseInt(new URLSearchParams(location.search).get("page"), 10);
+  return Number.isFinite(p) && p >= 1 ? p : 1;
+})();
+let timers = [];
+
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const nome = () => esc(state.name || "Vous");
+const IMG = (f) => "imagens/" + f;
+
+function next() { page++; render(); }
+function back() { page = Math.max(1, page - 1); render(); }
+function set(key, value) { state[key] = value; }
+function pick(key, value) { set(key, value); render(); setTimeout(next, 300); }
+function toggle(key, value) {
+  const arr = state[key];
+  state[key] = arr.includes(value) ? arr.filter((v) => v !== value) : [...arr, value];
+  render();
+}
+function step(key, delta, min, max) { state[key] = Math.max(min, Math.min(max, state[key] + delta)); render(); }
+
+/* ============================================================
+   COMPONENTES
+   ============================================================ */
+const chevronLeft = `<svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>`;
+const chevronDown = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>`;
+
+function header() {
+  const pct = ((page - 1) / (TOTAL - 1)) * 100;
+  return `
+  <div class="flex-shrink-0 px-4 pt-3 pb-2 bg-background">
+    <div class="flex items-center gap-3 mb-2">
+      <button onclick="back()" class="p-1 -ml-1 text-muted-foreground" aria-label="Retour">${chevronLeft}</button>
+      <img src="${IMG("logo.svg")}" alt="Le Secret de l'Insuline" class="h-11 object-contain" />
+    </div>
+    <div class="progress-bar-track"><div class="progress-bar-fill" style="width:${pct}%"></div></div>
+  </div>`;
+}
+
+function singleChoice(title, key, options, opts = {}) {
+  const textSize = opts.small ? "font-bold text-sm" : "font-bold";
+  return `
+  <div class="px-5 py-8 flex flex-col gap-4">
+    <h2 class="text-2xl font-bold text-center">${title}</h2>
+    <div class="flex flex-col gap-3 mt-4">
+      ${options.map((o) => `
+        <button onclick="pick('${key}','${o.value}')" class="quiz-option flex items-center gap-3 ${state[key] === o.value ? "selected" : ""}">
+          <span class="text-2xl">${o.emoji}</span><span class="${textSize}">${o.label}</span>
+        </button>`).join("")}
+    </div>
+  </div>`;
+}
+
+function multiChoice(title, key, options) {
+  return `
+  <div class="px-5 py-8 flex flex-col gap-4">
+    <h2 class="text-2xl font-bold text-center">${title}</h2>
+    <p class="text-sm text-muted-foreground text-center -mt-1">Sélectionnez toutes les réponses qui s'appliquent</p>
+    <div class="flex flex-col gap-3 mt-1">
+      ${options.map((o) => `
+        <button onclick="toggle('${key}','${o.value}')" class="quiz-option flex items-center gap-3 ${state[key].includes(o.value) ? "selected" : ""}">
+          <span class="text-2xl">${o.emoji}</span><span class="font-bold text-sm">${o.label}</span>
+        </button>`).join("")}
+    </div>
+    <button onclick="next()" ${state[key].length === 0 ? "disabled" : ""} class="btn-quiz">Continuer</button>
+  </div>`;
+}
+
+function stepper(title, key, unit, min, max) {
+  const v = state[key];
+  const extra = key === "desiredWeight" && state.weight - v > 0
+    ? `<div class="bg-btn-green/10 text-btn-green font-bold px-4 py-2 rounded-full text-sm">Objectif : perdre ${state.weight - v} kg 🎯</div>` : "";
+  return `
+  <div class="px-5 py-8 flex flex-col gap-6 items-center">
+    <h2 class="text-2xl font-extrabold text-center">${title}</h2>
+    <div class="text-6xl font-black text-primary">${v}<span class="text-2xl font-bold ml-1">${unit}</span></div>
+    <div class="flex gap-3">
+      ${[["-5", -5], ["−", -1], ["+", 1], ["+5", 5]].map(([l, d]) =>
+        `<button onclick="step('${key}',${d},${min},${max})" class="w-14 h-14 rounded-full border-2 border-border font-bold text-lg hover:bg-muted transition-colors">${l}</button>`).join("")}
+    </div>
+    ${extra}
+    <button onclick="next()" class="btn-quiz">Continuer</button>
+  </div>`;
+}
+
+const checks = `
+  <div class="flex items-center justify-center gap-2 text-[10px] text-muted-foreground flex-wrap shrink-0">
+    <span class="flex items-center gap-1"><span class="text-btn-green">✓</span> 100 % gratuit</span>
+    <span class="text-border">·</span>
+    <span class="flex items-center gap-1"><span class="text-btn-green">✓</span> Résultat immédiat</span>
+    <span class="text-border">·</span>
+    <span class="flex items-center gap-1"><span class="text-btn-green">✓</span> 100 % naturel</span>
+  </div>`;
+
+/* ============================================================
+   DADOS
+   ============================================================ */
+const AREAS = {
+  papada: { label: "Double menton", emoji: "😊", frase: "du double menton" },
+  bracos: { label: "Bras", emoji: "💪", frase: "des bras" },
+  barriga: { label: "Ventre", emoji: "🤰", frase: "du ventre" },
+  cintura: { label: "Taille", emoji: "💝", frase: "de la taille" },
+  gluteos: { label: "Fessiers", emoji: "🍑", frase: "des fessiers" },
+  coxas: { label: "Cuisses", emoji: "🦵", frase: "des cuisses" },
+  "corpo-todo": { label: "Tout le corps", emoji: "✨", frase: "de tout le corps" },
+};
+
+function frasesAreas() {
+  const sel = state.bodyAreas.filter((a) => a !== "corpo-todo");
+  const t = (sel.length ? sel : ["barriga"]).map((a) => AREAS[a].frase);
+  if (t.length === 1) return t[0];
+  return t.slice(0, -1).join(", ") + " et " + t[t.length - 1];
+}
+
+const DEPOIMENTOS = [
+  { quote: "J'ai perdu 9 kg en 21 jours. J'ai dû jeter certains pantalons et shorts.", name: "Maria", age: 47, result: "-9 kg", image: "antes-depois-maria.jpg" },
+  { quote: "", name: "Rosana", age: 52, result: "-7 kg", image: "antes-depois-rosana.jpg" },
+  { quote: "Je me suis regardée dans le miroir et je me suis reconnue.", name: "Fernanda", age: 43, result: "-11 kg", image: "antes-depois-fernanda.jpg" },
+  { quote: "J'ai retrouvé l'énergie pour m'occuper de mes enfants.", name: "Claudia", age: 36, result: "-8 kg", image: "antes-depois-4.jpg" },
+];
+
+const FAQ = [
+  { q: "Est-ce que la méthode fonctionne vraiment ?", a: "La méthode repose sur des recettes simples et rassasiantes et une routine alimentaire de 21 jours créée par une médecin. Les résultats varient selon chaque personne, son point de départ et sa régularité." },
+  { q: "En combien de temps vais-je voir une différence ?", a: "Beaucoup de femmes disent se sentir moins ballonnées et avoir moins de fringales dès les premières semaines. La perte de poids dépend de chacune et de la régularité avec laquelle la routine est suivie." },
+  { q: "Est-ce sans danger ?", a: "Ce sont des recettes à base d'aliments courants. Ce n'est pas un médicament et cela ne remplace pas un avis médical. Si vous êtes enceinte, allaitez, suivez un traitement ou avez une maladie chronique, parlez-en à votre médecin avant de commencer." },
+  { q: "Comment vais-je recevoir le programme ?", a: "Juste après le paiement, vous recevez par e-mail l'accès à l'application avec les recettes, la routine de 21 jours et tous les bonus. L'accès est immédiat et à vie." },
+  { q: "Et si ça ne me convient pas ?", a: "Vous avez 30 jours de garantie. Si le programme ne vous convient pas, nous vous remboursons intégralement, sans justification." },
+  { q: "Le paiement est-il sécurisé ?", a: "Oui. Le paiement passe par une plateforme sécurisée et chiffrée. Vos données sont protégées." },
+  { q: "Faut-il acheter des ingrédients chers ?", a: "Non. Tous les ingrédients se trouvent au supermarché et restent abordables." },
+];
+
+/* ============================================================
+   PÁGINAS
+   ============================================================ */
+const PAGES = {
+  // 1 — Capa
+  1: () => `
+  <div class="flex flex-col h-full bg-[#FFF5EB] overflow-hidden">
+    <div class="flex justify-center pt-3 pb-1 shrink-0"><img src="${IMG("logo.svg")}" alt="Le Secret de l'Insuline" class="h-10 object-contain" /></div>
+    <div class="px-4 flex flex-col gap-1.5 flex-1 min-h-0 pb-3">
+      <h1 class="text-center text-[20px] leading-[1.1] font-black text-foreground shrink-0">
+        LA RECETTE <span class="gradient-text">CRÉÉE PAR UNE MÉDECIN</span> QUE LES FEMMES DE PLUS DE 40 ANS <span class="gradient-text">ADOPTENT</span>
+      </h1>
+      <p class="text-center text-[12px] text-muted-foreground leading-tight px-2 shrink-0">Un rituel naturel, préparé au mixeur en quelques minutes.</p>
+      <div class="relative flex-1 min-h-0">
+        <div class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[85%] h-[80%] rounded-full pointer-events-none" style="background:radial-gradient(circle, rgba(255,170,60,0.28) 0%, rgba(255,170,60,0) 68%)"></div>
+        <img src="${IMG("doutora-cover.png")}" alt="La médecin créatrice de la méthode avec la recette" class="absolute inset-0 w-full h-full object-cover object-top drop-shadow-[0_10px_18px_rgba(120,70,10,0.22)]" />
+        <div class="absolute left-1 top-1 bg-white/90 backdrop-blur-sm rounded-full pl-1.5 pr-3 py-1 shadow-md flex items-center gap-1.5 z-10">
+          <span class="text-base">🩺</span>
+          <div class="leading-none">
+            <div class="text-[11px] font-black text-foreground">${esc(CONFIG.medicaNome || "Médecin")}</div>
+            <div class="text-[8px] font-semibold text-muted-foreground tracking-wide">${esc(CONFIG.medicaTitulo)}</div>
+          </div>
+        </div>
+        <div class="absolute right-2 top-[52%] bg-primary text-primary-foreground text-[11px] font-black px-2.5 py-1 rounded-full shadow-lg ring-2 ring-[#FFF5EB] z-10 whitespace-nowrap">recette économique</div>
+      </div>
+      <div class="text-center text-[11px] text-muted-foreground leading-snug shrink-0">
+        Répondez au quiz et découvrez <strong class="text-btn-green">la version adaptée à votre corps</strong>
+      </div>
+      <button onclick="next()" class="btn-quiz-green text-sm shrink-0">JE DÉCOUVRE MA VERSION</button>
+      ${checks}
+    </div>
+  </div>`,
+
+  // 2 — Idade
+  2: () => singleChoice("Quel âge avez-vous ?", "age", [
+    { value: "18-27", emoji: "🌸", label: "18 – 27 ans" },
+    { value: "28-39", emoji: "💐", label: "28 – 39 ans" },
+    { value: "40-54", emoji: "🌺", label: "40 – 54 ans" },
+    { value: "54+", emoji: "🌷", label: "54 ans et +" },
+  ]),
+
+  // 3 — Tipo de corpo
+  3: () => {
+    const opts = [
+      { value: "medio", label: "Moyenne", img: "body-medio.webp" },
+      { value: "acima-do-peso", label: "Quelques kilos en trop", img: "body-acima.webp" },
+      { value: "sobrepeso", label: "Surpoids", img: "body-sobrepeso.webp" },
+      { value: "plus-size", label: "Grande taille", img: "body-plussize.webp" },
+    ];
+    return `
+    <div class="px-5 py-8 flex flex-col gap-4">
+      <h2 class="text-2xl font-extrabold text-center">Comment est votre <span class="gradient-text">corps aujourd'hui</span> ?</h2>
+      <div class="grid grid-cols-2 gap-3 mt-2">
+        ${opts.map((o) => `
+          <button onclick="pick('bodyType','${o.value}')" class="quiz-option flex flex-col items-center gap-2 py-3 ${state.bodyType === o.value ? "selected" : ""}">
+            <img src="${IMG(o.img)}" alt="${o.label}" class="w-28 h-28 object-cover rounded-lg" loading="lazy" />
+            <span class="font-bold text-sm">${o.label}</span>
+          </button>`).join("")}
+      </div>
+    </div>`;
+  },
+
+  // 4 — Áreas do corpo
+  4: () => `
+  <div class="px-5 py-6 flex flex-col gap-4">
+    <h2 class="text-xl font-bold text-center">Où sentez-vous que votre <span class="gradient-text">corps a le plus changé</span> ?</h2>
+    <div class="flex gap-3 items-stretch">
+      <div class="w-[42%] relative flex-shrink-0"><img src="${IMG("body-areas.webp")}" alt="Zones du corps" class="w-full h-full rounded-lg object-cover" loading="lazy" /></div>
+      <div class="flex-1 flex flex-col gap-2">
+        ${Object.entries(AREAS).map(([v, a]) => `
+          <button onclick="toggle('bodyAreas','${v}')" class="quiz-option flex items-center gap-2 py-2 text-sm ${state.bodyAreas.includes(v) ? "selected" : ""}">
+            <span>${a.emoji}</span><span class="font-semibold">${a.label}</span>
+          </button>`).join("")}
+      </div>
+    </div>
+    <button onclick="next()" ${state.bodyAreas.length === 0 ? "disabled" : ""} class="btn-quiz">Continuer</button>
+  </div>`,
+
+  // 5 — Você não está sozinha
+  5: () => `
+  <div class="flex flex-col items-center justify-center h-full px-6 py-8 text-center animate-fade-in">
+    <div class="mb-6"><div class="w-16 h-16 rounded-full bg-secondary flex items-center justify-center mx-auto"><span class="text-3xl">🤝</span></div></div>
+    <h2 class="text-2xl font-bold text-foreground mb-4 leading-tight">Vous n'êtes pas <span class="gradient-text">seule.</span></h2>
+    <div class="bg-card rounded-2xl shadow-md border border-border px-6 py-5 mb-6 w-full max-w-sm">
+      <div class="text-5xl font-black text-primary mb-1">💬</div>
+      <p class="text-sm text-muted-foreground mb-4">C'est l'une des plaintes les plus fréquentes chez les femmes</p>
+      <p class="text-base font-semibold text-foreground leading-snug">
+        Beaucoup de femmes voient la graisse s'installer au niveau <span class="gradient-text">${frasesAreas()}</span> même sans manger beaucoup.
+      </p>
+    </div>
+    <button onclick="next()" class="btn-quiz w-full">J'ai compris, je continue</button>
+  </div>`,
+
+  // 6 — A médica
+  6: () => `
+  <div class="px-5 py-8 flex flex-col gap-3 items-center animate-fade-in">
+    <h2 class="text-2xl font-bold text-center text-foreground">Une méthode créée par une médecin 🩺</h2>
+    <!-- IMAGEMAQUI: para colocar uma imagem aqui, preencha CONFIG.imagemTela6 no topo do script -->
+    <div class="w-full rounded-2xl overflow-hidden border border-border shadow-md bg-[#FFF5EB]">
+      <img src="${esc(CONFIG.imagemTela6)}" alt="" class="w-full h-auto" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />
+      <div class="items-center justify-center text-muted-foreground font-bold" style="display:none;height:42vh;border:2px dashed hsl(var(--border))">IMAGEMAQUI</div>
+    </div>
+    <p class="text-base text-muted-foreground leading-relaxed text-center">
+      ${CONFIG.medicaNome ? esc(CONFIG.medicaNome) + " a créé" : "Elle a créé"} cette routine pour les femmes qui veulent mieux manger sans régime compliqué : des recettes simples et rassasiantes, préparées au mixeur.
+    </p>
+    <button onclick="next()" class="btn-quiz w-full">Continuer</button>
+  </div>`,
+
+  // 7 — Nome
+  7: () => `
+  <div class="px-5 py-8 flex flex-col gap-6 items-center">
+    <h2 class="text-2xl font-extrabold text-center">Comment puis-je vous appeler ?</h2>
+    <input id="nome" type="text" value="${esc(state.name)}" placeholder="Votre prénom"
+      oninput="state.name=this.value; document.getElementById('btnNome').disabled=!this.value.trim()"
+      onkeydown="if(event.key==='Enter'&&this.value.trim()){state.name=this.value.trim();next()}"
+      class="w-full text-center text-xl font-bold py-4 px-4 border-2 rounded-xl border-border focus:border-primary focus:outline-none bg-background" />
+    <button id="btnNome" onclick="state.name=state.name.trim(); next()" ${state.name.trim() ? "" : "disabled"} class="btn-quiz">Continuer</button>
+  </div>`,
+
+  // 8 — O que incomoda
+  8: () => {
+    const opts = [
+      { value: "autoestima", emoji: "💔", title: "Mon estime de moi", desc: "Je me regarde dans le miroir et je ne me reconnais plus" },
+      { value: "saude", emoji: "🩺", title: "Ma santé", desc: "J'ai l'impression que ma santé en pâtit" },
+      { value: "relacionamentos", emoji: "👥", title: "Mes relations", desc: "J'évite de sortir, d'être prise en photo ou de voir du monde" },
+      { value: "rotina", emoji: "📅", title: "Mon quotidien", desc: "Je n'ai plus l'énergie de m'occuper de ma famille et de moi" },
+    ];
+    return `
+    <div class="px-5 py-8 flex flex-col gap-4">
+      <h2 class="text-2xl font-bold text-center"><span class="gradient-text">${nome()}</span>, qu'est-ce qui vous pèse le plus avec votre poids aujourd'hui ?</h2>
+      <div class="flex flex-col gap-3 mt-2">
+        ${opts.map((o) => `
+          <button onclick="pick('weightImpact','${o.value}')" class="quiz-option flex items-start gap-3 ${state.weightImpact === o.value ? "selected" : ""}">
+            <span class="text-2xl mt-1">${o.emoji}</span>
+            <div><div class="font-bold">${o.title}</div><div class="text-sm text-muted-foreground">${o.desc}</div></div>
+          </button>`).join("")}
+      </div>
+    </div>`;
+  },
+
+  // 9 — Já tentou
+  9: () => singleChoice(`Avez-vous déjà essayé de <span class="gradient-text">maigrir</span> ?`, "appearance", [
+    { value: "varias-vezes", emoji: "😞", label: "Oui, plusieurs fois. Je perds puis je reprends" },
+    { value: "nao-mantem", emoji: "😶", label: "Oui, mais je n'arrive jamais à tenir" },
+    { value: "primeira-vez", emoji: "✨", label: "J'essaie vraiment pour la première fois" },
+    { value: "tudo", emoji: "😩", label: "J'ai tout essayé et rien n'a marché" },
+  ], { small: true }),
+
+  // 10 — Não é falta de força de vontade
+  10: () => `
+  <div class="px-5 py-8 flex flex-col gap-6 items-center text-center">
+    <div class="text-5xl">🧬</div>
+    <h2 class="text-xl font-bold leading-snug text-foreground"><span class="gradient-text">${nome()}</span>, votre corps a appris à résister.</h2>
+    <p class="text-base text-muted-foreground leading-relaxed">Ce n'est pas un manque de volonté.</p>
+    <p class="text-base text-foreground leading-relaxed font-semibold">La méthode vous aide à retrouver des repas qui calent vraiment, pour avoir moins de fringales au quotidien.</p>
+    <button onclick="next()" class="btn-quiz w-full">J'ai compris, je continue</button>
+  </div>`,
+
+  // 11 — Barreiras
+  11: () => multiChoice("Qu'est-ce qui vous empêche le plus de maigrir aujourd'hui ?", "barriers", [
+    { value: "dinheiro", emoji: "💸", label: "J'ai déjà dépensé de l'argent sans résultat" },
+    { value: "financeiro", emoji: "💰", label: "Les solutions efficaces coûtent trop cher" },
+    { value: "constancia", emoji: "📉", label: "Je commence mais je n'arrive pas à tenir" },
+    { value: "fome", emoji: "🍫", label: "J'ai faim et je finis par craquer" },
+    { value: "tempo", emoji: "⏰", label: "Je n'ai pas le temps pour les régimes" },
+  ]),
+
+  // 12 — Simples e barato
+  12: () => `
+  <div class="px-5 py-8 flex flex-col gap-6 items-center text-center">
+    <div class="text-5xl">🥤</div>
+    <h2 class="text-xl font-bold leading-snug">Pas besoin de produits chers ni de régime compliqué.</h2>
+    <div class="bg-green-100 border border-green-300 rounded-2xl p-5 w-full">
+      <p class="text-base text-foreground leading-relaxed font-semibold">
+        <strong class="gradient-text">Le Secret de l'Insuline</strong> utilise des ingrédients que vous trouvez <strong class="gradient-text">au supermarché</strong>.
+      </p>
+      <p class="text-sm text-muted-foreground mt-3">Pas d'ingrédient hors de prix. Pas de pharmacie. Juste un mixeur.</p>
+    </div>
+    <button onclick="next()" class="btn-quiz w-full">Continuer</button>
+  </div>`,
+
+  // 13 — Objetivos
+  13: () => multiChoice(`Qu'est-ce que vous voulez <span class="gradient-text">obtenir</span> ?`, "goals", [
+    { value: "saude", emoji: "❤️", label: "Prendre soin de ma santé" },
+    { value: "peso", emoji: "⚖️", label: "Perdre du poids pour de bon" },
+    { value: "desinchar", emoji: "💧", label: "Me sentir moins gonflée" },
+    { value: "energia", emoji: "⚡", label: "Avoir plus d'énergie au quotidien" },
+    { value: "autoestima", emoji: "🌸", label: "Me sentir bien dans ma peau" },
+  ]),
+
+  // 14 — Inchaço
+  14: () => singleChoice("Avez-vous souvent des ballonnements, le ventre dur ou une digestion lente ?", "bloating", [
+    { value: "sempre", emoji: "😣", label: "Oui, je me sens gonflée presque tous les jours" },
+    { value: "as-vezes", emoji: "😐", label: "Parfois, surtout le soir" },
+    { value: "raramente", emoji: "😊", label: "Rarement" },
+  ], { small: true }),
+
+  // 15 — Como funciona
+  15: () => {
+    const card = (n, icon, title, desc) => `
+      <div class="relative border border-border rounded-2xl p-5 flex flex-col items-center text-center gap-2 shadow-md">
+        <div class="absolute -top-3 -right-2 w-9 h-9 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold text-sm shadow-lg">${n}</div>
+        <div class="mt-1">${icon}</div>
+        <div class="font-bold text-sm leading-tight">${title}</div>
+        <div class="text-xs text-muted-foreground leading-relaxed">${desc}</div>
+      </div>`;
+    const ok = (t) => `
+      <div class="flex items-center gap-3 rounded-xl border border-green-300 bg-green-50 p-4">
+        <span class="text-green-600 font-bold text-lg">✓</span><span class="text-sm font-semibold text-foreground">${t}</span>
+      </div>`;
+    return `
+    <div class="px-5 py-6 flex flex-col gap-5">
+      <h2 class="text-2xl font-bold text-center leading-snug"><span class="gradient-text">${nome()}</span>, voici comment fonctionne la méthode ! 🎉</h2>
+      <div class="flex flex-col gap-3 w-full">
+        ${ok("Des ingrédients naturels")}${ok("1 à 2 fois par jour")}${ok("Recette 100 % naturelle")}
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        ${card(1, `<img src="${IMG("icon-antes.png")}" alt="Avant" class="w-10 h-10 object-contain" />`, "Avant", "Fringales, repas qui ne calent pas")}
+        ${card(2, `<span class="text-3xl">🥤</span>`, "La recette", "Préparée au mixeur, riche en fibres et rassasiante")}
+        ${card(3, `<span class="text-3xl">🍽️</span>`, "Des repas qui calent", "Moins d'envies de grignoter entre les repas")}
+        ${card(4, `<span class="text-3xl">✨</span>`, "Une routine simple", "Facile à tenir pendant 21 jours")}
+      </div>
+      <button onclick="next()" class="btn-quiz">J'ai compris ! Continuer 🚀</button>
+    </div>`;
+  },
+
+  // 16–18 — Peso, altura, peso desejado
+  16: () => stepper(`Quel est votre <span class="gradient-text">poids actuel</span> ?`, "weight", "kg", 45, 150),
+  17: () => stepper(`Quelle est votre <span class="gradient-text">taille</span> ?`, "height", "cm", 140, 200),
+  18: () => {
+    if (state.desiredWeight >= state.weight) state.desiredWeight = state.weight - 1;
+    return stepper(`Quel est votre <span class="gradient-text">poids idéal</span> ?`, "desiredWeight", "kg", 40, state.weight - 1);
+  },
+
+  // 19 — Objetivo alcançável
+  19: () => {
+    const diff = state.weight - state.desiredWeight;
+    const pts = [[5, 10], [22, 14], [40, 26], [58, 40], [75, 50], [95, 55]];
+    const d = pts.map((p, i) => `${i ? "L" : "M"}${p[0]},${p[1]}`).join(" ");
+    timers.push(setTimeout(() => document.querySelectorAll(".anim").forEach((el) => el.classList.add("on")), 300));
+    return `
+    <style>
+      .anim-line{stroke-dasharray:300;stroke-dashoffset:300;transition:stroke-dashoffset 1.5s ease-out}
+      .anim-line.on{stroke-dashoffset:0}
+      .anim-area{clip-path:inset(0 100% 0 0);transition:clip-path 1.5s ease-out}
+      .anim-area.on{clip-path:inset(0 0 0 0)}
+      .anim-fade{opacity:0;transition:opacity .5s ease-out}
+      .anim-fade.on{opacity:1}
+    </style>
+    <div class="px-5 py-8 flex flex-col gap-5 items-center text-center">
+      <h2 class="text-xl font-bold"><span class="gradient-text">${nome()}</span>, cet objectif est tout à fait atteignable !</h2>
+      <div class="bg-green-100 border border-green-300 rounded-2xl p-5 w-full">
+        <div class="flex items-center justify-center gap-4">
+          <div class="flex flex-col items-center"><span class="text-3xl font-black text-foreground">${state.weight}kg</span><span class="text-xs text-muted-foreground">aujourd'hui</span></div>
+          <span class="text-2xl text-primary font-bold">→</span>
+          <div class="flex flex-col items-center"><span class="text-3xl font-black text-primary">${state.desiredWeight}kg</span><span class="text-xs text-muted-foreground">votre objectif</span></div>
+        </div>
+        <div class="mt-3 bg-primary/10 rounded-lg py-2 px-3"><span class="font-bold text-primary">Objectif : perdre ${diff} kg</span></div>
+      </div>
+      <div class="w-full bg-card border border-border rounded-2xl p-4">
+        <p class="text-xs font-bold text-muted-foreground mb-3 uppercase tracking-wide">VOTRE PARCOURS</p>
+        <div class="relative w-full" style="height:180px">
+          <svg viewBox="0 0 100 100" preserveAspectRatio="none" class="w-full h-full">
+            <defs><linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="hsl(var(--primary))" stop-opacity="0.3"/><stop offset="100%" stop-color="hsl(var(--primary))" stop-opacity="0.02"/>
+            </linearGradient></defs>
+            <path class="anim anim-area" d="${d} L95,100 L5,100 Z" fill="url(#chartGrad)"/>
+            <path class="anim anim-line" d="${d}" fill="none" stroke="hsl(var(--primary))" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <div class="anim anim-fade absolute left-2 flex flex-col items-start" style="top:10%;transition-delay:.3s">
+            <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-foreground"></div><span class="text-lg font-black text-foreground">${state.weight}kg</span></div>
+            <span class="text-xs text-muted-foreground ml-5">aujourd'hui</span>
+          </div>
+          <div class="anim anim-fade absolute right-2 flex items-center gap-2" style="top:48%;transition-delay:1.2s">
+            <span class="text-xs text-muted-foreground">objectif</span>
+            <div class="w-3.5 h-3.5 rounded-full bg-green-500 animate-pulse"></div>
+            <span class="text-lg font-black text-green-600 bg-card px-1 rounded">${state.desiredWeight}kg</span>
+          </div>
+        </div>
+        <p class="text-[11px] text-muted-foreground mt-2">Avec de la régularité, votre objectif de <span class="font-bold text-primary">${state.desiredWeight} kg</span> est à votre portée.</p>
+      </div>
+      <div class="w-full flex flex-col gap-2"><button onclick="next()" class="btn-quiz">C'EST PARTI</button></div>
+    </div>`;
+  },
+
+  // 20 — Rotina
+  20: () => `
+  <div class="px-5 py-8 flex flex-col gap-4">
+    <h2 class="text-2xl font-bold text-center">Comment est votre <span class="gradient-text">quotidien</span> ?</h2>
+    <div class="flex flex-col gap-3 mt-2">
+      ${[
+        { value: "fora", emoji: "🏢", label: "Je travaille à l'extérieur" },
+        { value: "home", emoji: "🏠", label: "Je travaille à la maison / en télétravail" },
+        { value: "casa", emoji: "👨‍👩‍👧", label: "Je m'occupe de la maison et de la famille" },
+        { value: "corrida", emoji: "🏃‍♀️", label: "J'ai un emploi du temps très chargé et irrégulier" },
+      ].map((o) => `
+        <button onclick="set('routine',['${o.value}']); render(); setTimeout(next,300)" class="quiz-option flex items-center gap-3 ${state.routine.includes(o.value) ? "selected" : ""}">
+          <span class="text-2xl">${o.emoji}</span><span class="font-bold">${o.label}</span>
+        </button>`).join("")}
+    </div>
+  </div>`,
+
+  // 21 — Sono
+  21: () => singleChoice(`Combien d'heures <span class="gradient-text">dormez-vous par nuit</span> ?`, "sleep", [
+    { value: "menos-5", emoji: "😴", label: "Moins de 5 h" },
+    { value: "5-7", emoji: "🌙", label: "5 – 7 heures" },
+    { value: "7-9", emoji: "😊", label: "7 – 9 heures" },
+    { value: "mais-9", emoji: "💤", label: "Plus de 9 h" },
+  ]),
+
+  // 22 — Compromisso
+  22: () => `
+  <div class="px-5 py-6 flex flex-col gap-4 items-center">
+    <div class="relative w-full flex justify-center">
+      <img src="${IMG("commitment-before-after.png")}" alt="Transformation avant et après" class="w-full max-w-xs rounded-2xl" />
+      <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div class="animate-bounce-horizontal"><div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center shadow-lg">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+        </div></div>
+      </div>
+    </div>
+    <div class="bg-primary rounded-full py-1.5 px-4 flex items-center justify-center gap-1.5">
+      <span class="text-xs">🎁</span><span class="text-white font-bold text-[11px] tracking-wide">POUR DÉBLOQUER VOTRE PLAN, J'AI BESOIN DE SAVOIR :</span>
+    </div>
+    <h2 class="text-xl font-bold text-center">Vous engagez-vous à suivre <span class="gradient-text">la routine</span> pendant au moins 1 semaine ?</h2>
+    <div class="flex flex-col gap-3 w-full">
+      ${[
+        { value: "sim", emoji: "😍", label: "Oui, je m'engage !" },
+        { value: "hoje", emoji: "🤩", label: "Je veux commencer dès aujourd'hui" },
+        { value: "duvidas", emoji: "🤔", label: "J'ai encore quelques questions" },
+      ].map((o) => `
+        <button onclick="pick('commitment','${o.value}')" class="quiz-option flex items-center gap-3 ${state.commitment === o.value ? "selected" : ""}">
+          <span class="text-2xl">${o.emoji}</span><span class="font-bold">${o.label}</span>
+        </button>`).join("")}
+    </div>
+  </div>`,
+
+  // 23 — Primeiro resultado
+  23: () => singleChoice(`Quel changement voulez-vous sentir <span class="gradient-text">en premier</span> ?`, "firstResult", [
+    { value: "saude", emoji: "❤️", label: "Prendre soin de ma santé" },
+    { value: "peso", emoji: "⚖️", label: "Perdre du poids pour de bon" },
+    { value: "desinchar", emoji: "💧", label: "Me sentir moins gonflée" },
+    { value: "energia", emoji: "⚡", label: "Avoir plus d'énergie au quotidien" },
+    { value: "autoestima", emoji: "🌸", label: "Me sentir bien dans ma peau" },
+  ], { small: true }),
+
+  // 24 — Carregando análise
+  24: () => {
+    const steps = [
+      { label: "Calcul de votre IMC", icon: "⚖️", duration: 1800 },
+      { label: "Prise en compte de votre âge", icon: "🎂", duration: 1500 },
+      { label: "Analyse de vos réponses", icon: "🔍", duration: 1600 },
+      { label: "Choix de vos recettes", icon: "✨", duration: 1400 },
+    ];
+    let cur = 0, prog = 0;
+    const draw = () => {
+      const el = document.getElementById("loadSteps");
+      if (!el) return;
+      const total = Math.min(((cur + prog / 100) / steps.length) * 100, 100);
+      el.innerHTML = steps.map((s, i) => {
+        const done = i < cur, active = i === cur, future = i > cur;
+        const cls = done ? "border-primary/40 bg-primary/5" : active ? "border-primary/60 bg-primary/10 shadow-md shadow-primary/10" : "border-border/40 bg-muted/30 opacity-50";
+        const txt = done ? "text-primary" : active ? "text-foreground" : "text-muted-foreground";
+        return `
+        <div class="rounded-xl border p-4 transition-all duration-500 ${cls}">
+          <div class="flex items-center gap-3">
+            <div class="text-xl transition-transform duration-300 ${active ? "animate-bounce" : ""}">${done ? "✅" : s.icon}</div>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-semibold transition-colors duration-300 ${txt}">${s.label}</p>
+              ${active ? `<div class="mt-2 h-1.5 rounded-full bg-muted overflow-hidden"><div class="h-full rounded-full bg-gradient-to-r from-primary to-primary/70" style="width:${prog}%"></div></div>` : ""}
+            </div>
+          </div>
+        </div>`;
+      }).join("");
+      document.getElementById("loadBar").style.width = total + "%";
+      document.getElementById("loadPct").textContent = Math.round(total) + " % terminé";
+    };
+    const run = () => {
+      if (cur >= steps.length) { timers.push(setTimeout(next, 600)); return; }
+      let t = 0;
+      const iv = setInterval(() => {
+        t += 30; prog = Math.min((t / steps[cur].duration) * 100, 100); draw();
+        if (t >= steps[cur].duration) { clearInterval(iv); timers.push(setTimeout(() => { cur++; prog = 0; draw(); run(); }, 300)); }
+      }, 30);
+      timers.push(iv);
+    };
+    timers.push(setTimeout(() => { draw(); run(); }, 0));
+    return `
+    <div class="px-5 py-8 flex flex-col items-center justify-center min-h-[70vh] gap-8">
+      <div class="text-center space-y-2">
+        <div class="text-4xl animate-pulse">🧠</div>
+        <h2 class="text-xl font-bold text-foreground">Nous préparons votre analyse, <span class="text-primary">${nome()}</span>...</h2>
+        <p class="text-sm text-muted-foreground">Nous prenons en compte toutes vos réponses</p>
+      </div>
+      <div id="loadSteps" class="w-full max-w-sm space-y-4"></div>
+      <div class="w-full max-w-sm space-y-2">
+        <div class="h-2 rounded-full bg-muted overflow-hidden"><div id="loadBar" class="h-full rounded-full bg-primary transition-all duration-300 ease-out" style="width:0%"></div></div>
+        <p id="loadPct" class="text-xs text-center text-muted-foreground">0 % terminé</p>
+      </div>
+    </div>`;
+  },
+
+  // 25 — Análise pronta
+  25: () => {
+    const h = state.height / 100;
+    const imc = state.weight / (h * h);
+    const cat = imc >= 30 ? "Obésité" : imc >= 25 ? "Surpoids" : imc >= 18.5 ? "Normal" : "Insuffisance pondérale";
+    const pontos = [];
+    if (state.bloating === "sempre" || state.bloating === "as-vezes") pontos.push("Ballonnements fréquents");
+    if (state.barriers.includes("fome")) pontos.push("Fringales difficiles à contrôler");
+    if (state.barriers.includes("constancia") || ["varias-vezes", "nao-mantem", "tudo"].includes(state.appearance)) pontos.push("Difficulté à tenir sur la durée");
+    if (state.sleep === "menos-5" || state.sleep === "5-7") pontos.push("Sommeil insuffisant");
+    if (state.barriers.includes("tempo") || state.routine.includes("corrida")) pontos.push("Peu de temps pour cuisiner");
+    if (state.bodyAreas.includes("barriga")) pontos.push("Graisse installée au niveau du ventre");
+    if (!pontos.length) pontos.push("Repas qui ne calent pas assez");
+    const beneficios = [
+      "Des recettes rassasiantes pour moins de fringales",
+      "Une routine simple de 21 jours",
+      "Des ingrédients du supermarché",
+      "Une liste de courses prête",
+      "Des desserts inclus dans le plan",
+    ];
+    return `
+    <div class="px-5 py-6 flex flex-col gap-5">
+      <h2 class="text-xl font-bold text-center"><span class="gradient-text">${nome()}</span>, votre analyse est prête.</h2>
+      <div class="rounded-2xl overflow-hidden border border-border">
+        <div class="h-1.5 bg-primary"></div>
+        <div class="p-5 flex flex-col items-center gap-4 bg-card">
+          <div class="text-center">
+            <div class="text-5xl font-black text-primary">${imc.toFixed(1).replace(".", ",")}</div>
+            <div class="text-sm text-muted-foreground">Votre IMC : <span class="font-bold text-primary">${cat}</span></div>
+          </div>
+          <div class="w-full border-t border-border"></div>
+          <div class="flex flex-col gap-2 w-full">
+            <div class="font-bold text-muted-foreground text-sm text-center">⚠️ Points d'attention d'après vos réponses :</div>
+            ${pontos.slice(0, 4).map((p) => `<div class="flex items-center gap-2 text-sm"><span class="text-destructive text-base">❌</span> ${p}</div>`).join("")}
+          </div>
+        </div>
+      </div>
+      <div class="bg-btn-green/10 rounded-xl p-4 text-center text-sm font-medium text-btn-green">🌿 Votre plan de 21 jours a été adapté à ces points.</div>
+      <div class="flex flex-col gap-1">
+        <h3 class="text-base font-bold text-center mb-2">Ce que vous apporte <span class="gradient-text">Le Secret de l'Insuline</span> 👇</h3>
+        ${beneficios.map((b) => `<div class="flex items-center gap-3 bg-secondary/50 rounded-xl px-4 py-3 text-sm font-medium"><span class="text-btn-green text-base">✅</span> ${b}</div>`).join("")}
+      </div>
+      <div class="rounded-2xl overflow-hidden border border-border">
+        <img src="${IMG("depoimento-antes-depois.jpg")}" alt="Témoignage avant et après" class="w-full" loading="lazy" />
+        <div class="p-4 text-center flex flex-col items-center gap-2">
+          <p class="text-sm font-bold">"J'ai perdu 11 kg en 5 semaines !"</p>
+          <p class="text-xs text-muted-foreground">Rose, 52 ans – São Paulo</p>
+          <div class="text-lg">⭐⭐⭐⭐⭐</div>
+          <p class="aviso">Résultat individuel. Les résultats varient d'une personne à l'autre.</p>
+        </div>
+      </div>
+      <button onclick="next()" class="btn-quiz">Continuer</button>
+    </div>`;
+  },
+
+  // 26 — Depoimentos
+  26: () => `
+  <div class="px-5 py-6 flex flex-col gap-4 items-center">
+    <h2 class="text-xl font-bold text-center">Elles ont déjà suivi <span class="gradient-text">Le Secret de l'Insuline</span></h2>
+    <div class="w-full flex flex-col gap-4">
+      ${DEPOIMENTOS.map((t) => `
+        <div class="rounded-2xl border border-border bg-card overflow-hidden shadow-md">
+          <img src="${IMG(t.image)}" alt="Avant et après – ${t.name}" class="w-full" loading="lazy" />
+          <div class="p-4 flex flex-col items-center gap-1">
+            <div class="text-lg font-black text-primary">${t.result}</div>
+            ${t.quote ? `<p class="text-sm font-semibold text-foreground text-center">"${t.quote}"</p>` : ""}
+            <p class="text-xs text-muted-foreground">${t.name}, ${t.age} ans</p>
+            <div class="text-sm">⭐⭐⭐⭐⭐</div>
+          </div>
+        </div>`).join("")}
+    </div>
+    <p class="aviso">Témoignages réels de clientes. Les résultats varient d'une personne à l'autre.</p>
+    <button onclick="next()" class="btn-quiz-green w-full">Je veux commencer ma routine</button>
+  </div>`,
+
+  // 27 — Montando a rotina
+  27: () => {
+    const itens = ["Préparation de votre routine de 21 jours", "Personnalisation de vos recettes", "Calcul des ingrédients et de la liste de courses", "Préparation de vos bonus", "Routine prête"];
+    let cur = 0, prog = 0;
+    const draw = () => {
+      const el = document.getElementById("rotItens");
+      if (!el) return;
+      el.innerHTML = itens.map((s, i) => `<div class="text-sm font-semibold ${i <= cur ? "opacity-100" : "opacity-30"}">${i < cur ? "✅" : i === cur ? "⏳" : "◻️"} ${s}</div>`).join("");
+      document.getElementById("rotBar").style.width = prog + "%";
+    };
+    timers.push(setInterval(() => { cur = Math.min(cur + 1, itens.length - 1); draw(); }, 1200));
+    timers.push(setInterval(() => { prog = Math.min(prog + 1.5, 100); draw(); }, 100));
+    timers.push(setTimeout(next, 8500));
+    timers.push(setTimeout(draw, 0));
+    return `
+    <div class="px-5 py-8 flex flex-col gap-6 items-center justify-center min-h-full text-center">
+      <div class="bg-primary text-primary-foreground rounded-2xl p-6 w-full">
+        <div class="text-4xl mb-2">✨</div>
+        <h2 class="text-lg font-bold">Votre routine <strong>Le Secret de l'Insuline</strong> de <strong>21 jours</strong> est prête !</h2>
+      </div>
+      <div class="text-3xl text-btn-green animate-bounce-vertical">⬇️</div>
+      <div id="rotItens" class="flex flex-col gap-2 w-full text-left"></div>
+      <div class="w-full progress-bar-track"><div id="rotBar" class="progress-bar-fill" style="width:0%"></div></div>
+    </div>`;
+  },
+
+  // 28 — Oferta
+  28: () => {
+    const diff = Math.max(1, state.weight - state.desiredWeight);
+    const plano = [
+      { day: "Semaine 1", desc: "Mise en place : recettes, liste de courses et premiers repères", icon: "✨" },
+      { day: "Semaine 2", desc: "Les nouvelles habitudes s'installent", icon: "🔥" },
+      { day: "Semaine 3", desc: `Vous avancez vers votre objectif de -${diff} kg`, icon: "🏆", meta: true },
+    ];
+    const bonus = [
+      { title: "Bonus 1 : Astuces pour tirer le meilleur de la routine", desc: "Des conseils pratiques pour tenir au quotidien" },
+      { title: "Bonus 2 : 40 desserts gourmands et équilibrés", desc: "Pour vous faire plaisir sans sortir du plan" },
+      { title: "Bonus 3 : 20 shakes et smoothies", desc: "Des boissons simples et délicieuses" },
+    ];
+    const inclui = [
+      ["Les recettes complètes du Secret de l'Insuline", false],
+      ["La routine de 21 jours étape par étape", false],
+      ["L'accès à l'application", false],
+      ["La liste complète des ingrédients", false],
+      ["Accès à vie", false],
+      ["BONUS : Astuces pour tirer le meilleur de la routine", true],
+      ["BONUS : 20 shakes et smoothies", true],
+      ["BONUS : 40 desserts gourmands et équilibrés", true],
+    ];
+    const cta = (txt) => `<a href="${esc(CONFIG.checkout)}" class="btn-quiz-green block w-full text-center">${txt}</a>`;
+    return `
+    <div class="flex flex-col">
+      <div class="bg-primary text-primary-foreground text-center py-2 text-sm font-bold sticky top-0 z-10">🎁 Votre plan personnalisé est prêt</div>
+      <div class="px-5 py-6 flex flex-col gap-6">
+        <div class="text-center">
+          <h1 class="text-xl font-bold leading-snug"><span class="gradient-text">${nome()}</span>, votre routine de 21 jours avec Le Secret de l'Insuline est prête</h1>
+          <p class="text-sm text-muted-foreground mt-3">Elle a été préparée à partir de vos réponses au quiz.</p>
+        </div>
+        <div class="rounded-2xl overflow-hidden border border-border shadow-sm">
+          <div class="bg-primary text-primary-foreground p-4 text-center">
+            <div class="text-xs uppercase tracking-wider opacity-90">Votre plan personnalisé</div>
+            <div class="text-lg font-bold mt-1">Routine de 21 jours</div>
+          </div>
+          <div class="p-4 flex flex-col gap-3">
+            ${plano.map((v) => `
+              <div class="flex items-center gap-3 border border-border rounded-xl p-3">
+                <span class="text-2xl">${v.icon}</span>
+                <div class="flex-1"><div class="text-xs uppercase font-bold text-primary">${v.day}</div><div class="font-bold text-sm">${v.desc}</div></div>
+                ${v.meta ? `<span class="bg-btn-green text-primary-foreground text-xs px-2 py-1 rounded font-bold">OBJECTIF</span>` : ""}
+              </div>`).join("")}
+          </div>
+        </div>
+        <div class="text-center"><h2 class="text-base font-bold">Vous recevez aussi <span class="text-primary">3 bonus</span></h2></div>
+        <div class="flex flex-col gap-3">
+          ${bonus.map((v) => `
+            <div class="rounded-xl border border-border bg-secondary/40 p-4 flex gap-3">
+              <span class="text-2xl shrink-0">🎁</span>
+              <div><div class="font-bold text-sm">${v.title}</div><div class="text-xs text-muted-foreground mt-1">${v.desc}</div></div>
+            </div>`).join("")}
+        </div>
+        <div class="rounded-2xl overflow-hidden border border-border shadow-sm">
+          <div class="bg-primary text-primary-foreground p-4 text-center">
+            <div class="text-xs uppercase tracking-wider opacity-90">Découvrez</div>
+            <div class="text-base font-bold mt-1">Tout ce à quoi vous aurez accès</div>
+          </div>
+          <div class="p-4 flex flex-col gap-2">
+            ${inclui.map(([t, b]) => `<div class="flex items-start gap-2 text-sm"><span class="text-btn-green shrink-0">${b ? "🎁" : "✅"}</span><span>${t}</span></div>`).join("")}
+            <div class="border-t border-border mt-3 pt-4 text-center">
+              <div class="text-xs text-muted-foreground mt-2">POUR SEULEMENT</div>
+              <div class="text-5xl font-black text-btn-green leading-none mt-1">${esc(CONFIG.preco)}</div>
+              <div class="text-sm text-muted-foreground mt-2">${esc(CONFIG.precoObs)}</div>
+            </div>
+          </div>
+        </div>
+        ${cta("JE COMMENCE 🥰")}
+        <div class="rounded-2xl p-5 text-center border-2 border-primary bg-secondary">
+          <div class="inline-flex items-center justify-center w-20 h-20 rounded-full bg-primary text-primary-foreground font-black text-xs leading-tight mb-3">GARANTIE<br>30<br>JOURS</div>
+          <div class="font-bold text-base">Satisfaite ou remboursée</div>
+          <p class="text-sm text-muted-foreground mt-2">Vous avez 30 jours pour tester la routine.</p>
+          <p class="text-sm text-muted-foreground mt-2">Si elle ne vous convient pas, nous vous remboursons intégralement, sans justification.</p>
+        </div>
+        <div>
+          <h3 class="text-lg font-bold text-center mb-3">❓ Questions fréquentes</h3>
+          <div class="w-full">
+            ${FAQ.map((f) => `<details class="faq-item"><summary><span class="text-left">${f.q}</span>${chevronDown}</summary><p>${f.a}</p></details>`).join("")}
+          </div>
+        </div>
+        ${cta("JE COMMENCE MAINTENANT ! 🔥")}
+        <div class="text-center text-xs text-muted-foreground pt-4">🔒 Paiement 100 % sécurisé · Vos données sont protégées</div>
+        <p class="aviso pb-4">Ce programme propose des recettes et une routine alimentaire. Il ne remplace pas un avis médical. Les résultats varient d'une personne à l'autre.</p>
+      </div>
+    </div>`;
+  },
+};
+
+/* ============================================================
+   RENDER
+   ============================================================ */
+const scroller = document.createElement("div");
+scroller.className = "flex-1 overflow-y-auto";
+
+function render() {
+  timers.forEach((t) => { clearTimeout(t); clearInterval(t); });
+  timers = [];
+  const app = document.getElementById("app");
+  const showHeader = page > 1 && page < TOTAL;
+  const keepScroll = app.dataset.page === String(page);
+  const prevScroll = scroller.scrollTop;
+  const focusNome = document.activeElement && document.activeElement.id === "nome";
+  app.innerHTML = showHeader ? header() : "";
+  scroller.innerHTML = (PAGES[page] || PAGES[1])();
+  app.appendChild(scroller);
+  scroller.scrollTop = keepScroll ? prevScroll : 0;
+  app.dataset.page = String(page);
+  if (page === 7 && !focusNome) { const i = document.getElementById("nome"); if (i && !state.name) i.focus(); }
+}
+render();
+</script>
+</body>
+</html>

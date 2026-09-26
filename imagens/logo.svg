@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 270">
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="60%" stop-color="#FFB547" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#FFB547" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="fill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFD9A0"/>
+      <stop offset="45%" stop-color="#FF9A1F"/>
+      <stop offset="100%" stop-color="#F27A00"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FFF3C4"/>
+      <stop offset="50%" stop-color="#FFC24A"/>
+      <stop offset="100%" stop-color="#FFE9A8"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="300" cy="135" rx="298" ry="133" fill="url(#glow)"/>
+  <ellipse cx="300" cy="135" rx="272" ry="112" fill="url(#fill)" stroke="url(#ring)" stroke-width="10"/>
+  <ellipse cx="300" cy="135" rx="252" ry="96" fill="none" stroke="#FFF6D8" stroke-opacity="0.6" stroke-width="3"/>
+  <text x="300" y="104" text-anchor="middle" font-family="Poppins, 'Arial Black', Arial, sans-serif" font-weight="900" font-size="52" fill="#E86A00" letter-spacing="1">LE SECRET DE</text>
+  <text x="300" y="178" text-anchor="middle" font-family="Poppins, 'Arial Black', Arial, sans-serif" font-weight="900" font-size="72" fill="#FFFFFF" stroke="#E86A00" stroke-width="2" paint-order="stroke" letter-spacing="1">L'INSULINE</text>
+</svg>
